@@ -1,0 +1,19 @@
+Translation of keyframe T
+
+Quaternion: Q
+
+X = (u - cx) * Z / fx
+Y = (v - cy) * Z / fy
+Z
+1
+
+Rotate then translate: T * Q
+
+
+
+a * X + b * Y + c * Z = d
+a * (u - cx) / fx * Z + b * (v - cy) / fy * Z + c * Z = d
+
+Z = d / (a * (u - cx) / fx + b * (v - cy) / fy + c)
+X = (u - cx) * Z / fx
+Y = (v - cy) * Z / fy
