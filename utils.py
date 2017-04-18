@@ -13,8 +13,9 @@ from PIL import Image
 
 def read_keyframes(path):
   return np.loadtxt(path, dtype=dict(
-    names=('time', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'),
-    formats=('|S17', np.float, np.float, np.float, np.float, np.float, np.float, np.float)
+    names=('time', 'x', 'y', 'z', 'tx', 'ty', 'tz', 'r00', 'r01', 'r02', 'r10', 'r11', 'r12', 'r20', 'r21', 'r22'),
+    formats=('|S17', np.float, np.float, np.float, np.float, np.float, np.float, np.float, np.float, np.float, np.float,
+             np.float, np.float, np.float, np.float, np.float)
   ), delimiter=' ', skiprows=0)
 
 def read_mappoints(path):
@@ -38,9 +39,12 @@ def read_until_good(path, read_method):
     except:
       pass
 
-def get_graph_segment_for_frame(frameID, image_id=0, sigma=1.0, k=200, min=50):
-  fn = join(KEYFRAME_DIR, '{:.6f}'.format(frameID) + '_' + str(image_id) + '.ppm')
-  print(fn)
+def load_frame(frameID, image_id=0):
+  fn = join(KEYFRAME_DIR, frameID + '_' + str(image_id) + '.ppm')
+  return np.asarray(Image.open(fn))
+
+def get_graph_segment_for_frame(frameID, image_id=0, sigma=1.0, k=500, min=200):
+  fn = join(KEYFRAME_DIR, frameID + '_' + str(image_id) + '.ppm')
   return get_graph_segment(fn, sigma, k, min)
 
 def get_graph_segment(fn, sigma=1.0, k=500, min=50):

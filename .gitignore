@@ -3,3 +3,4 @@ old
 output
 segment/segment
 *.pyc
+.idea

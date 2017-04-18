@@ -123,7 +123,7 @@ def compute_distance(point, equation):
   return float(abs(a * x + b * y + c * z - d)) / (a * a + b * b + c * c)
 
 
-def fit_plane_with_outlier_removed(points, distance_ratio=2):
+def fit_plane_with_outlier_removed(points, distance_ratio=1):
   equation = best_fitting_plane(points, True)
   distances = []
   for point in points:
@@ -142,4 +142,4 @@ def fit_plane_with_outlier_removed(points, distance_ratio=2):
   if len(accepted_points) > 2:
     return best_fitting_plane(accepted_points)
   else:
-    return equation
+    return None
