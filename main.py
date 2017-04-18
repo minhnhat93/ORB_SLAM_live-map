@@ -130,24 +130,27 @@ def create_plane_equation_dict(segment, choosen_mps, pix_of_mps):
   for cl in classes:
     points = point_dict[cl]
     if len(points) >= 3:
-      plane = fit_plane_with_outlier_removed(points)
+      plane = best_fitting_plane(points)
       plane_equation_dict[cl] = plane
   return plane_equation_dict
 
 def create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world, world_to_camera, kf_id, fx, fy, cx, cy, im_size=[480, 640]):
   # us, vs are rows and cols respectively
   mps = []
+  pix = []
   for row, col in zip(rows, cols):
     cl = segment[row, col]
     x, y = col, row
     plane_equation = plane_equation_dict[cl]
     if plane_equation is not None:
-      X, Y, Z = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy)
-      x_, y_ = convert_3d_point_to_pix(X, Y, Z, world_to_camera, fx, fy, cx, cy)
-      a, b, c, d = plane_equation
-      print((x_, y_), (x, y), a * X + b * Y + c * Z + d)
-      mps.append([kf_id, -1, X, Y, Z])
-  return mps
+      world_coord = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy)
+      if world_coord is not None:
+        X, Y, Z = world_coord
+        x_, y_ = convert_3d_point_to_pix(X, Y, Z, world_to_camera, fx, fy, cx, cy)
+        a, b, c, d = plane_equation
+        mps.append([kf_id, -1, X, Y, Z])
+        pix.append([x_, y_])
+  return mps, pix
 
 
 def parse_args():
@@ -169,6 +172,7 @@ def parse_args():
   parser.add_argument('--with_extra_points', default=0, type=int)
   parser.add_argument('--postprocess', default=0, type=int)
   parser.add_argument('--clean_after_iteration', default=0, type=int)
+  parser.add_argument('--show_individual_graph', default=0, type=int)
   return parser.parse_args()
 
 args = parse_args()
@@ -188,12 +192,15 @@ numCols, numRows = get_num_cols_rows(origins, resolution)
 counts = np.ones((numRows, numCols), dtype=float) * 0
 occupied = np.ones((numRows, numCols), dtype=float) * 0
 
-grid_size = 50
+grid_size = [50, 25]
 im_size = [480, 640]
-# rows_range = np.arange(0, im_size[0], grid_size)
-rows_range = np.arange(150, 301, grid_size)
-cols_range = np.arange(0, im_size[1], grid_size)
+rows_range = np.arange(0, im_size[0], grid_size[0])
+# rows_range = np.arange(125, 226, grid_size[0])
+cols_range = np.arange(0, im_size[1], grid_size[1])
 rows, cols = np.meshgrid(rows_range, cols_range)
+cols_add = np.ones(cols.shape[1], dtype=float)
+cols_add = (np.cumsum(cols_add) - 1) * grid_size[1] / cols.shape[1]
+cols = (cols + cols_add.reshape(-1, cols_add.size)).astype(int) % im_size[1]
 rows, cols = rows.flatten(), cols.flatten()
 
 processed_kfs = []
@@ -221,6 +228,10 @@ while 1:
       kfs_mappoints[mp[0]].append(mp)
 
   for kf_id in kfs_id:
+    if args.clean_after_iteration:
+      counts = np.ones((numRows, numCols), dtype=float) * 0
+      occupied = np.ones((numRows, numCols), dtype=float) * 0
+
     extra_mps = []
     if args.with_extra_points:
       kf = kfs_dict[kf_id]  # current keyframe
@@ -250,28 +261,24 @@ while 1:
       pix_of_mps = np.asarray(pix_of_mps)
       plane_equation_dict = create_plane_equation_dict(segment, choosen_mps, pix_of_mps)
 
-      extra_mps = create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world,
+      extra_mps, pix_of_extra_mps = create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world,
                                                             world_to_camera, kf_id, fx, fy, cx, cy, im_size)
-      pix_of_extra_mps = []
-      for mp in extra_mps:
-        x, y = convert_3d_point_to_pix(mp[2], mp[3], mp[4], world_to_camera, fx, fy, cx, cy)
-        if x in range(0, segment.shape[1]) and y in range(0, segment.shape[0]):
-          pix_of_extra_mps.append([x, y])
-
       print("Extra Map Points: ", len(extra_mps))
 
-      draw_points(segment_with_color, np.asarray(pix_of_mps, dtype=int), (0, 0, 255))
-      draw_points(segment_with_color, np.asarray(pix_of_extra_mps, dtype=int), (255, 0, 0))
-      cv2.imshow('Map Point Projection', segment_with_color)
-      cv2.waitKey(20)
 
-    if args.clean_after_iteration:
-      counts = np.ones((numRows, numCols), dtype=float) * 0
-      occupied = np.ones((numRows, numCols), dtype=float) * 0
+    # Update map
     if args.with_orb_slam_points:
       update_map(occupied, counts, [kf_id], kfs_dict, mps, origins, resolution, only_end_point=args.only_end_points)
-    update_map(occupied, counts, [kf_id], kfs_dict, extra_mps, origins, resolution, only_end_point=args.only_end_points)
+    if args.with_extra_points:
+      update_map(occupied, counts, [kf_id], kfs_dict, extra_mps, origins, resolution, only_end_point=args.only_end_points)
 
+    # Draw segmentation
+    draw_points(segment_with_color, np.asarray(pix_of_mps, dtype=int), (0, 255, 0))
+    draw_points(segment_with_color, np.asarray(pix_of_extra_mps, dtype=int), (0, 0, 255))
+    cv2.imshow('Map Point Projection', segment_with_color)
+    cv2.waitKey(20)
+
+    # Compute output
     if not args.only_end_points:
       occupied[counts < args.min_num] = 0
       counts[counts < args.min_num] = 0
@@ -286,7 +293,32 @@ while 1:
     output[output < threshold[0]] = 0.0
     output[(output != 1.0) * (output != 0.0)] = threshold[0] + 0.1
     save_map(args.save, threshold, origins, resolution)
+
+    # Draw live map
     if args.livemap:
+      if args.show_individual_graph:
+        if args.with_orb_slam_points:
+          counts_orb_slam_mp = np.ones((numRows, numCols), dtype=float) * 0
+          occupied_orb_slam_mp = np.ones((numRows, numCols), dtype=float) * 0
+          update_map(occupied_orb_slam_mp, counts_orb_slam_mp, [kf_id], kfs_dict, mps, origins, resolution, only_end_point=args.only_end_points)
+          output_orb_slam_mp = occupied_orb_slam_mp / counts_orb_slam_mp
+          output_orb_slam_mp[counts_orb_slam_mp == 0] = threshold[0] + 0.1
+          output_orb_slam_mp[output_orb_slam_mp > threshold[1]] = 1.0
+          output_orb_slam_mp[output_orb_slam_mp < threshold[0]] = 0.0
+          output_orb_slam_mp[(output_orb_slam_mp != 1.0) * (output_orb_slam_mp != 0.0)] = threshold[0] + 0.1
+          cv2.imshow('ORB-SLAM Map Points Update', 1 - output_orb_slam_mp)
+          cv2.waitKey(20)
+        if args.with_extra_points:
+          counts_extra = np.ones((numRows, numCols), dtype=float) * 0
+          occupied_extra = np.ones((numRows, numCols), dtype=float) * 0
+          update_map(occupied_extra, counts_extra, [kf_id], kfs_dict, extra_mps, origins, resolution, only_end_point=args.only_end_points)
+          output_extra = occupied_extra / counts_extra
+          output_extra[counts_extra == 0] = threshold[0] + 0.1
+          output_extra[output_extra > threshold[1]] = 1.0
+          output_extra[output_extra < threshold[0]] = 0.0
+          output_extra[(output_extra != 1.0) * (output_extra != 0.0)] = threshold[0] + 0.1
+          cv2.imshow('Extra Map Points Update', 1 - output_extra)
+          cv2.waitKey(20)
       cv2.imshow('Occupancy Grid Map', 1 - output)
       cv2.waitKey(20)
     print("Processed frame: {}".format(kf_id))

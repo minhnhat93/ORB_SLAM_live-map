@@ -43,7 +43,7 @@ def load_frame(frameID, image_id=0):
   fn = join(KEYFRAME_DIR, frameID + '_' + str(image_id) + '.ppm')
   return np.asarray(Image.open(fn))
 
-def get_graph_segment_for_frame(frameID, image_id=0, sigma=1.0, k=500, min=200):
+def get_graph_segment_for_frame(frameID, image_id=0, sigma=.0, k=500, min=200):
   fn = join(KEYFRAME_DIR, frameID + '_' + str(image_id) + '.ppm')
   return get_graph_segment(fn, sigma, k, min)
 

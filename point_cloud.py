@@ -115,7 +115,10 @@ def convert_pix_to_3d_point(u, v, plane_equation, camera_to_world, fx, fy, cx, c
   Y_val = Y.evalf(subs={z: z_val})
   Z_val = Z.evalf(subs={z: z_val})
   # return 3d coordinate in world
-  return X_val, Y_val, Z_val
+  if z_val > 0 and z_val < 2.5:
+    return X_val, Y_val, Z_val
+  else:
+    return None
 
 
 # def distort(x, y, fx, fy, cx, cy, k1, k2, p1, p2, k3):

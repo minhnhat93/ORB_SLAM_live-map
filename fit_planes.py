@@ -114,13 +114,13 @@ def compute_z(x, y, equation):
   if c == 0:
     return float('nan')
   else:
-    return (d - a * x - b * y) / c
+    return (-d - a * x - b * y) / c
 
 
 def compute_distance(point, equation):
   a, b, c, d = equation
   x, y, z = point
-  return float(abs(a * x + b * y + c * z - d)) / (a * a + b * b + c * c)
+  return float(abs(a * x + b * y + c * z + d)) / (a * a + b * b + c * c)
 
 
 def fit_plane_with_outlier_removed(points, distance_ratio=1):
@@ -131,14 +131,13 @@ def fit_plane_with_outlier_removed(points, distance_ratio=1):
   distances = np.asarray(distances)
   std = np.std(distances)
   mean_distance = distances.mean()
-  print('STD: ', std)
-  print('Mean: ', mean_distance)
+  # print('STD: ', std)
+  # print('Mean: ', mean_distance)
   accepted_points = []
   for j, point in enumerate(points):
     if abs(distances[j] - mean_distance) <= std * distance_ratio:
       accepted_points.append(point)
   accepted_points = np.asarray(accepted_points)
-  print(len(accepted_points))
   if len(accepted_points) > 2:
     return best_fitting_plane(accepted_points)
   else:
