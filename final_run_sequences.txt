@@ -1,0 +1,32 @@
+cd /home/nhat/git-clones/ORB_SLAM2
+###########################
+Start ORBSLAM ros:
+
+roscore
+
+rosrun ORB_SLAM2 Mono Vocabulary/ORBvoc.txt camera_setting.yaml
+
+./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt Examples/Monocular/TUM3.yaml /media/nhat/OEM_Disk/ORB_SLAM_dataset/TUM/rgbd_dataset_freiburg3_walking_halfsphere/
+
+###########################
+Play rosbag:
+
+cd /media/nhat/OEM_Disk/ORB_SLAM_dataset/
+rosbag play --pause 4.bag -s 70 (2nd floor)
+rosbag play --pause 2.bag (1st floor)
+
+############################
+TUM:
+
+python main.py --xmin -2 --xmax 6 --zmin -1 --zmax 6 --reso 0.01 --only_end_points 0 --with_orb_slam_points 1 --with_extra_points 0 --thresmin 0.196 --thresmax 0.65 --min_num 0 --clean_after_iteration 0 --show_individual_graph 0 --postprocess 1
+python main.py --xmin -2 --xmax 6 --zmin -1 --zmax 6 --reso 0.01 --only_end_points 0 --with_orb_slam_points 1 --with_extra_points 1 --thresmin 0.196 --thresmax 0.65 --min_num 0 --clean_after_iteration 0 --show_individual_graph 1 --postprocess 1 --grid_col 50
+
+python main.py --xmin -2 --xmax 6 --zmin -1 --zmax 6 --reso 0.01 --only_end_points 1 --with_orb_slam_points 1 --with_extra_points 0 --thresmin 0.196 --thresmax 0.65 --min_num 0 --clean_after_iteration 0 --show_individual_graph 0 --postprocess 1
+python main.py --xmin -2 --xmax 6 --zmin -1 --zmax 6 --reso 0.01 --only_end_points 1 --with_orb_slam_points 1 --with_extra_points 1 --thresmin 0.196 --thresmax 0.65 --min_num 0 --clean_after_iteration 0 --show_individual_graph 0 --postprocess 1 --grid_col 50
+
+############################
+2nd floor
+
+python main.py --xmin -4 --xmax 1 --zmin -2 --zmax 2 --reso 0.005 --only_end_points 0 --with_orb_slam_points 1 --with_extra_points 0 --thresmin 0.33 --thresmax 0.65 --min_num 10 --clean_after_iteration 0 --show_individual_graph 1
+python main.py --xmin -4 --xmax 1 --zmin -2 --zmax 2 --reso 0.005 --only_end_points 0 --with_orb_slam_points 1 --with_extra_points 1 --thresmin 0.33 --thresmax 0.65 --min_num 10 --clean_after_iteration 0 --show_individual_graph 1 --grid_col 50 --z_max 1.5
+

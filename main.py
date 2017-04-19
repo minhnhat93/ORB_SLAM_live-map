@@ -11,8 +11,10 @@ import time
 import shutil
 from point_cloud import convert_3d_point_to_pix, convert_pix_to_3d_point, get_camera_to_world, get_world_to_camera
 from fit_planes import best_fitting_plane, fit_plane_with_outlier_removed
-from config import cx, cy, fx, fy, k1, k2, p1, p2, k3
+from config import cx, cy, fx, fy
 from scipy.signal import convolve2d
+
+im_size = [480, 640]
 
 def save_map(MAP_SAVE, threshold, origins, resolution):
 
@@ -22,7 +24,7 @@ def save_map(MAP_SAVE, threshold, origins, resolution):
   with open(MAP_SAVE + '.yaml', 'wb') as f:
     f.write('image: map.pgm\n')
     f.write('resolution: {}\n'.format(resolution))
-    f.write('origin: [{} {} 0.0]\n'.format(origins[0], origins[1]))
+    f.write('origin: [{}, {}, 0.0]\n'.format(origins[0], origins[1]))
     f.write('occupied_thresh: {}\n'.format(threshold[1]))
     f.write('free_thresh: 0.165\n'.format(threshold[0]))
     f.write('negate: 0\n')
@@ -70,7 +72,7 @@ def get_increment_vector(dx, dy, dz, resolution):
     return [dx * resolution / dz * sign_dx, dy * resolution / dz * sign_dy, resolution * sign_dz]
 
 
-def update_map(occupied, counts, kfs_id, kfs_dict, mps, origins, resolution, y_check=None, only_end_point=0):
+def update_map(occupied, counts, kfs_id, kfs_dict, mps, origins, resolution, y_check=[None, None], only_end_point=0):
   numCols, numRows = get_num_cols_rows(origins, resolution)
   for mp in mps:
     if not mp[0] in kfs_id:
@@ -100,7 +102,7 @@ def update_map(occupied, counts, kfs_id, kfs_dict, mps, origins, resolution, y_c
       while 1:
         if (px - kx) * (px - x) < 0 or (pz - kz) * (pz - z) < 0:
           break
-        if y_check is not None and (y < y_check[0] or y > y_check[1]):
+        if (y_check[0] is not None and y < y_check[0]) or (y_check[1] is not None and y > y_check[1]):
           break
         coord_x = int((x - origins[0]) / resolution)
         coord_z = numRows - int((z - origins[1]) / resolution) - 1
@@ -134,7 +136,7 @@ def create_plane_equation_dict(segment, choosen_mps, pix_of_mps):
       plane_equation_dict[cl] = plane
   return plane_equation_dict
 
-def create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world, world_to_camera, kf_id, fx, fy, cx, cy, im_size=[480, 640]):
+def create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world, world_to_camera, kf_id, fx, fy, cx, cy, z_max):
   # us, vs are rows and cols respectively
   mps = []
   pix = []
@@ -143,11 +145,10 @@ def create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, s
     x, y = col, row
     plane_equation = plane_equation_dict[cl]
     if plane_equation is not None:
-      world_coord = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy)
+      world_coord = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy, z_max=args.z_max)
       if world_coord is not None:
         X, Y, Z = world_coord
         x_, y_ = convert_3d_point_to_pix(X, Y, Z, world_to_camera, fx, fy, cx, cy)
-        a, b, c, d = plane_equation
         mps.append([kf_id, -1, X, Y, Z])
         pix.append([x_, y_])
   return mps, pix
@@ -161,7 +162,7 @@ def parse_args():
   parser.add_argument('--xmax', default=5, type=float)
   parser.add_argument('--zmax', default=5, type=float)
   parser.add_argument('--reso', default=0.01, type=float)
-  parser.add_argument('--thresmin', default=0.165, type=float)
+  parser.add_argument('--thresmin', default=0.196, type=float)
   parser.add_argument('--thresmax', default=0.65, type=float)
   parser.add_argument('--save', default='output/map', type=str)
   parser.add_argument('--offline', default=1, type=int)
@@ -173,6 +174,14 @@ def parse_args():
   parser.add_argument('--postprocess', default=0, type=int)
   parser.add_argument('--clean_after_iteration', default=0, type=int)
   parser.add_argument('--show_individual_graph', default=0, type=int)
+  parser.add_argument('--start_row', default=int(im_size[0] * 0.3333), type=int)
+  parser.add_argument('--end_row', default=int(im_size[0] * 0.6666), type=int)
+  parser.add_argument('--grid_row', default=50, type=int)
+  parser.add_argument('--grid_col', default=25, type=int)
+  parser.add_argument('--y_min', default=None, type=int)
+  parser.add_argument('--y_max', default=None, type=int)
+  parser.add_argument('--sigma', default=1.0, type=float)
+  parser.add_argument('--z_max', default=float('inf'), type=float)
   return parser.parse_args()
 
 args = parse_args()
@@ -192,16 +201,17 @@ numCols, numRows = get_num_cols_rows(origins, resolution)
 counts = np.ones((numRows, numCols), dtype=float) * 0
 occupied = np.ones((numRows, numCols), dtype=float) * 0
 
-grid_size = [50, 25]
-im_size = [480, 640]
-rows_range = np.arange(0, im_size[0], grid_size[0])
-# rows_range = np.arange(125, 226, grid_size[0])
+grid_size = [args.grid_row, args.grid_col]
+# rows_range = np.arange(0, im_size[0], grid_size[0])
+rows_range = np.arange(args.start_row, args.end_row, grid_size[0])
 cols_range = np.arange(0, im_size[1], grid_size[1])
 rows, cols = np.meshgrid(rows_range, cols_range)
 cols_add = np.ones(cols.shape[1], dtype=float)
 cols_add = (np.cumsum(cols_add) - 1) * grid_size[1] / cols.shape[1]
 cols = (cols + cols_add.reshape(-1, cols_add.size)).astype(int) % im_size[1]
 rows, cols = rows.flatten(), cols.flatten()
+
+y_check = [args.y_min, args.y_max]
 
 processed_kfs = []
 while 1:
@@ -246,7 +256,7 @@ while 1:
       world_to_camera = get_world_to_camera(camera_translation, camera_rotation)  # inverse tf matrix
 
       kf_img = load_frame(time_stamp, 0)
-      segment = get_graph_segment_for_frame(time_stamp, 0)  # segmentation from graph-cut algorithm
+      segment = get_graph_segment_for_frame(time_stamp, 0, sigma=args.sigma)  # segmentation from graph-cut algorithm
       segment_with_color = segment
       segment = segment[:, :, 0] * (255**2) + segment[:, :, 1] * 255 + segment[:, :, 2]
       # get pixel coordinates of the map points
@@ -262,21 +272,21 @@ while 1:
       plane_equation_dict = create_plane_equation_dict(segment, choosen_mps, pix_of_mps)
 
       extra_mps, pix_of_extra_mps = create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world,
-                                                            world_to_camera, kf_id, fx, fy, cx, cy, im_size)
+                                                            world_to_camera, kf_id, fx, fy, cx, cy, args.z_max)
       print("Extra Map Points: ", len(extra_mps))
+
+      # Draw segmentation
+      draw_points(segment_with_color, np.asarray(pix_of_mps, dtype=int), (0, 255, 0))
+      draw_points(segment_with_color, np.asarray(pix_of_extra_mps, dtype=int), (0, 0, 255))
+      cv2.imshow('Map Point Projection', segment_with_color)
+      cv2.waitKey(20)
 
 
     # Update map
     if args.with_orb_slam_points:
-      update_map(occupied, counts, [kf_id], kfs_dict, mps, origins, resolution, only_end_point=args.only_end_points)
+      update_map(occupied, counts, [kf_id], kfs_dict, mps, origins, resolution, y_check=y_check, only_end_point=args.only_end_points)
     if args.with_extra_points:
-      update_map(occupied, counts, [kf_id], kfs_dict, extra_mps, origins, resolution, only_end_point=args.only_end_points)
-
-    # Draw segmentation
-    draw_points(segment_with_color, np.asarray(pix_of_mps, dtype=int), (0, 255, 0))
-    draw_points(segment_with_color, np.asarray(pix_of_extra_mps, dtype=int), (0, 0, 255))
-    cv2.imshow('Map Point Projection', segment_with_color)
-    cv2.waitKey(20)
+      update_map(occupied, counts, [kf_id], kfs_dict, extra_mps, origins, resolution, y_check=y_check, only_end_point=args.only_end_points)
 
     # Compute output
     if not args.only_end_points:
@@ -285,9 +295,11 @@ while 1:
     if args.postprocess:
       conv_kernel = np.ones((3, 3))
       conv_kernel = conv_kernel / conv_kernel.sum()
-      occupied = convolve2d(occupied, conv_kernel,'same')
-      counts = convolve2d(counts, conv_kernel, 'same')
-    output = occupied / counts
+      occupied_ = convolve2d(occupied, conv_kernel,'same')
+      counts_ = convolve2d(counts, conv_kernel, 'same')
+      output = occupied_ / counts_
+    else:
+      output = occupied / counts
     output[counts == 0] = threshold[0] + 0.1
     output[output > threshold[1]] = 1.0
     output[output < threshold[0]] = 0.0
@@ -300,7 +312,7 @@ while 1:
         if args.with_orb_slam_points:
           counts_orb_slam_mp = np.ones((numRows, numCols), dtype=float) * 0
           occupied_orb_slam_mp = np.ones((numRows, numCols), dtype=float) * 0
-          update_map(occupied_orb_slam_mp, counts_orb_slam_mp, [kf_id], kfs_dict, mps, origins, resolution, only_end_point=args.only_end_points)
+          update_map(occupied_orb_slam_mp, counts_orb_slam_mp, [kf_id], kfs_dict, mps, origins, resolution, y_check=y_check, only_end_point=args.only_end_points)
           output_orb_slam_mp = occupied_orb_slam_mp / counts_orb_slam_mp
           output_orb_slam_mp[counts_orb_slam_mp == 0] = threshold[0] + 0.1
           output_orb_slam_mp[output_orb_slam_mp > threshold[1]] = 1.0
@@ -311,7 +323,7 @@ while 1:
         if args.with_extra_points:
           counts_extra = np.ones((numRows, numCols), dtype=float) * 0
           occupied_extra = np.ones((numRows, numCols), dtype=float) * 0
-          update_map(occupied_extra, counts_extra, [kf_id], kfs_dict, extra_mps, origins, resolution, only_end_point=args.only_end_points)
+          update_map(occupied_extra, counts_extra, [kf_id], kfs_dict, extra_mps, origins, resolution, y_check=y_check, only_end_point=args.only_end_points)
           output_extra = occupied_extra / counts_extra
           output_extra[counts_extra == 0] = threshold[0] + 0.1
           output_extra[output_extra > threshold[1]] = 1.0

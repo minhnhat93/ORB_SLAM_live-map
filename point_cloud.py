@@ -99,7 +99,7 @@ def get_world_to_camera(translation, rotation):
 #   # return 3d coordinate in world
 #   return X_val, Y_val, Z_val
 
-def convert_pix_to_3d_point(u, v, plane_equation, camera_to_world, fx, fy, cx, cy):
+def convert_pix_to_3d_point(u, v, plane_equation, camera_to_world, fx, fy, cx, cy, z_max=float('inf')):
   a, b, c, d = plane_equation
   # X, Y, Z in camera coordinate
   z = sympy.symbols('z')
@@ -115,7 +115,7 @@ def convert_pix_to_3d_point(u, v, plane_equation, camera_to_world, fx, fy, cx, c
   Y_val = Y.evalf(subs={z: z_val})
   Z_val = Z.evalf(subs={z: z_val})
   # return 3d coordinate in world
-  if z_val > 0 and z_val < 2.5:
+  if z_val > 0 and z_val < z_max:
     return X_val, Y_val, Z_val
   else:
     return None
