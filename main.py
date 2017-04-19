@@ -145,7 +145,7 @@ def create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, s
     x, y = col, row
     plane_equation = plane_equation_dict[cl]
     if plane_equation is not None:
-      world_coord = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy, z_max=args.z_max)
+      world_coord = convert_pix_to_3d_point(x, y, plane_equation, camera_to_world, fx, fy, cx, cy, z_max=z_max)
       if world_coord is not None:
         X, Y, Z = world_coord
         x_, y_ = convert_3d_point_to_pix(X, Y, Z, world_to_camera, fx, fy, cx, cy)
@@ -181,7 +181,7 @@ def parse_args():
   parser.add_argument('--y_min', default=None, type=int)
   parser.add_argument('--y_max', default=None, type=int)
   parser.add_argument('--sigma', default=1.0, type=float)
-  parser.add_argument('--z_max', default=float('inf'), type=float)
+  parser.add_argument('--z_max_camera', default=float('inf'), type=float)
   return parser.parse_args()
 
 args = parse_args()
@@ -272,7 +272,7 @@ while 1:
       plane_equation_dict = create_plane_equation_dict(segment, choosen_mps, pix_of_mps)
 
       extra_mps, pix_of_extra_mps = create_extra_mps_from_plane_equation_dict(rows, cols, plane_equation_dict, segment, camera_to_world,
-                                                            world_to_camera, kf_id, fx, fy, cx, cy, args.z_max)
+                                                            world_to_camera, kf_id, fx, fy, cx, cy, args.z_max_camera)
       print("Extra Map Points: ", len(extra_mps))
 
       # Draw segmentation
